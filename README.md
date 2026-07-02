@@ -1,4 +1,4 @@
-# 🌾 Kios Tani Digital — Layanan Pupuk Subsidi
+# 🌾 Kios Tani Digital [Layanan Pupuk Subsidi]
 
 Prototipe sistem informasi verifikasi & edukasi pupuk subsidi berbasis chatbot.
 Petani cukup memasukkan **NIK / nomor telepon** untuk mengecek sisa kuota pupuk
