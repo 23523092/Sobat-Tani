@@ -150,11 +150,45 @@ export default function AsistenPage() {
             <Sparkles size={11} />
             {mode === "groq"
               ? "Ditenagai Groq AI"
-              : "Mode demo · jangan bagikan PIN/OTP · pembayaran hanya di kios resmi"}
+              : "Jangan bagikan PIN/OTP · pembayaran hanya di kios resmi"}
           </p>
         </div>
       </div>
     </main>
+  );
+}
+
+// Render inline **bold** dengan aman (tanpa dangerouslySetInnerHTML).
+function renderInline(text: string, keyBase: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((p, i) => {
+    if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={keyBase + i}>{p.slice(2, -2)}</strong>;
+    return <span key={keyBase + i}>{p}</span>;
+  });
+}
+
+// Format ringan: baris, bullet (- / •), dan **tebal**.
+function FormattedMessage({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <>
+      {lines.map((line, i) => {
+        const isBullet = /^\s*[-•]\s+/.test(line);
+        if (isBullet) {
+          const isi = line.replace(/^\s*[-•]\s+/, "");
+          return (
+            <div key={i} className="flex gap-1.5">
+              <span className="mt-px shrink-0 text-harvest-500">•</span>
+              <span>{renderInline(isi, `b${i}-`)}</span>
+            </div>
+          );
+        }
+        return (
+          <div key={i} className={line.trim() === "" ? "h-2" : undefined}>
+            {line.trim() === "" ? null : renderInline(line, `l${i}-`)}
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -163,13 +197,13 @@ function Bubble({ role, content }: { role: "user" | "assistant"; content: string
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} animate-fade-up`}>
       <div
-        className={`max-w-[82%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-card ${
+        className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-card ${
           isUser
-            ? "rounded-br-md bg-harvest-400 font-mono text-[13px] text-pine-800"
+            ? "whitespace-pre-wrap rounded-br-md bg-harvest-400 font-mono text-[13px] text-pine-800"
             : "rounded-bl-md bg-white text-pine-700"
         }`}
       >
-        {content}
+        {isUser ? content : <FormattedMessage text={content} />}
       </div>
     </div>
   );

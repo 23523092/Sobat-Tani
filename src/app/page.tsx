@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
-import { EDUKASI, formatRupiah, statistikGlobal } from "@/lib/data";
+import { Faq } from "@/components/Faq";
+import { formatRupiah } from "@/lib/data";
+import { getEdukasi, statistikGlobal } from "@/lib/queries";
 import {
   ArrowRight,
   ShieldCheck,
@@ -9,10 +11,22 @@ import {
   ScanLine,
   BookOpen,
   CheckCircle2,
+  UserPlus,
+  Clock,
+  MapPinned,
+  FileWarning,
+  LayoutDashboard,
+  UserCheck,
+  Receipt,
+  BarChart3,
+  Bot,
 } from "lucide-react";
 
-export default function Home() {
-  const stat = statistikGlobal();
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const [stat, edu] = await Promise.all([statistikGlobal(), getEdukasi()]);
+  const hetKeys = Object.keys(edu.het) as Array<keyof typeof edu.het>;
 
   return (
     <main className="min-h-screen bg-paper bg-grain">
@@ -22,8 +36,10 @@ export default function Home() {
           <Logo />
           <div className="hidden items-center gap-8 text-sm font-500 text-pine-600 md:flex">
             <a href="#cara" className="transition hover:text-pine-800">Cara Kerja</a>
+            <a href="#sistem" className="transition hover:text-pine-800">Sistem</a>
             <a href="#edukasi" className="transition hover:text-pine-800">Edukasi</a>
-            <Link href="/admin" className="transition hover:text-pine-800">Petugas</Link>
+            <a href="#faq" className="transition hover:text-pine-800">FAQ</a>
+            <Link href="/daftar" className="transition hover:text-pine-800">Daftar</Link>
           </div>
           <Link
             href="/asisten"
@@ -50,7 +66,7 @@ export default function Home() {
             </h1>
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-pine-600">
               Tak perlu antre atau bingung formulir. Sapa Asisten Tani, masukkan NIK,
-              dan langsung tahu sisa jatah pupuk subsidi Anda—lengkap dengan tuntunan
+              dan langsung tahu sisa jatah pupuk subsidi Anda, lengkap dengan tuntunan
               cara memupuk yang benar.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -62,12 +78,13 @@ export default function Home() {
                 Mulai Cek Kuota
                 <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />
               </Link>
-              <a
-                href="#cara"
+              <Link
+                href="/daftar"
                 className="inline-flex items-center gap-2 rounded-full border border-pine-200 px-6 py-3 text-sm font-600 text-pine-700 transition hover:border-pine-300 hover:bg-white/50"
               >
-                Pelajari dulu
-              </a>
+                <UserPlus size={16} />
+                Daftar sebagai penerima
+              </Link>
             </div>
           </div>
 
@@ -91,11 +108,57 @@ export default function Home() {
             </div>
           ))}
         </div>
+
+        {/* trust strip */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 opacity-80">
+          <span className="text-xs font-600 uppercase tracking-[0.15em] text-pine-400">Selaras dengan</span>
+          {["e-RDKK", "i-Pubers", "Kartu Tani", "HET Permentan"].map((t) => (
+            <span key={t} className="text-sm font-700 text-pine-500">{t}</span>
+          ))}
+        </div>
+      </section>
+
+      {/* MASALAH → SOLUSI */}
+      <section className="border-y border-pine-100 bg-white/40">
+        <div className="mx-auto max-w-6xl px-5 py-16">
+          <SectionHead
+            eyebrow="Kenapa ini penting"
+            title="Menyalurkan subsidi seharusnya tidak menyulitkan"
+            sub="Tiga hambatan klasik penyaluran pupuk subsidi, dan bagaimana Kios Tani Digital menuntaskannya."
+          />
+          <div className="mt-9 grid gap-5 md:grid-cols-3">
+            {[
+              {
+                i: Clock,
+                m: "Antre & informasi simpang siur",
+                s: "Petani tak lagi menebak jatahnya. Cek sisa kuota kapan saja lewat chat, tanpa datang ke kantor.",
+              },
+              {
+                i: FileWarning,
+                m: "Data pendaftar sulit diverifikasi",
+                s: "Petugas mengelola pengajuan dalam satu panel: setujui, tetapkan alokasi, atau tolak, semuanya terekam rapi.",
+              },
+              {
+                i: MapPinned,
+                m: "Penyaluran susah dipantau",
+                s: "Setiap penebusan terekam otomatis dengan waktu & kios, jadi distribusi transparan dan bisa diaudit.",
+              },
+            ].map((c) => (
+              <div key={c.m} className="rounded-2xl border border-pine-100 bg-paper p-6 shadow-card">
+                <span className="grid h-11 w-11 place-items-center rounded-xl bg-clay/10 text-clay">
+                  <c.i size={20} />
+                </span>
+                <h3 className="mt-4 font-display text-lg font-600 text-pine-800">{c.m}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-pine-600">{c.s}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* CARA KERJA */}
       <section id="cara" className="mx-auto max-w-6xl px-5 py-16">
-        <SectionHead eyebrow="Tiga langkah" title="Sesederhana mengobrol" />
+        <SectionHead eyebrow="Untuk petani · tiga langkah" title="Sesederhana mengobrol" />
         <div className="mt-9 grid gap-5 md:grid-cols-3">
           {[
             { i: ScanLine, t: "Masukkan NIK", d: "Ketik NIK 16 digit atau nomor telepon yang terdaftar di kelompok tani Anda." },
@@ -114,80 +177,208 @@ export default function Home() {
         </div>
       </section>
 
+      {/* SATU SISTEM, DUA SISI */}
+      <section id="sistem" className="border-y border-pine-100 bg-pine-800 text-paper">
+        <div className="mx-auto max-w-6xl px-5 py-16">
+          <div className="max-w-xl">
+            <span className="text-xs font-700 uppercase tracking-[0.2em] text-harvest-300">Satu sistem, dua sisi</span>
+            <h2 className="mt-2 font-display text-3xl font-600 leading-tight text-paper text-balance md:text-4xl">
+              Mudah untuk petani, terkendali untuk petugas
+            </h2>
+            <p className="mt-3 text-[15px] leading-relaxed text-pine-100">
+              Bukan sekadar chatbot. Di baliknya ada sistem informasi manajemen (MIS) lengkap
+              yang dipakai petugas kios untuk mengelola seluruh alur distribusi.
+            </p>
+          </div>
+
+          <div className="mt-9 grid gap-5 md:grid-cols-2">
+            {/* sisi petani */}
+            <div className="rounded-2xl border border-pine-600 bg-pine-700/60 p-6">
+              <div className="flex items-center gap-2 text-harvest-200">
+                <Bot size={18} />
+                <h3 className="font-display text-lg font-600">Sisi Petani</h3>
+              </div>
+              <ul className="mt-4 space-y-3">
+                {[
+                  "Cek sisa kuota via NIK/telepon lewat Asisten Tani",
+                  "Tanya dosis, syarat, cara menebus, dijawab AI",
+                  "Daftar sebagai penerima subsidi secara mandiri",
+                ].map((t) => (
+                  <li key={t} className="flex gap-2.5 text-sm leading-snug text-pine-50">
+                    <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-harvest-300" />
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {/* sisi petugas */}
+            <div className="rounded-2xl border border-pine-600 bg-pine-700/60 p-6">
+              <div className="flex items-center gap-2 text-harvest-200">
+                <LayoutDashboard size={18} />
+                <h3 className="font-display text-lg font-600">Panel Petugas (MIS)</h3>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {[
+                  { i: UserCheck, t: "Verifikasi pendaftar" },
+                  { i: Receipt, t: "Catat penebusan" },
+                  { i: BarChart3, t: "Dashboard penyerapan" },
+                  { i: ShieldCheck, t: "Audit trail transaksi" },
+                ].map((f) => (
+                  <div key={f.t} className="flex items-center gap-2 rounded-xl bg-pine-800/60 px-3 py-2.5 text-sm font-500 text-pine-50">
+                    <f.i size={15} className="text-harvest-300" />
+                    {f.t}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* EDUKASI */}
-      <section id="edukasi" className="border-y border-pine-100 bg-sage/40">
+      <section id="edukasi" className="border-b border-pine-100 bg-sage/40">
         <div className="mx-auto max-w-6xl px-5 py-16">
           <SectionHead
             eyebrow="Belajar sambil mengurus"
             title="Pupuk tepat, panen meningkat"
-            sub="Tema edukasi menyatu dalam layanan—setiap petani yang bertanya juga belajar."
+            sub="Tema edukasi menyatu dalam layanan, setiap petani yang bertanya juga belajar."
           />
           <div className="mt-9 grid gap-5 lg:grid-cols-3">
             {/* Syarat */}
             <div className="rounded-2xl border border-pine-100 bg-paper p-6 shadow-card">
               <h3 className="font-display text-lg font-600 text-pine-800">Syarat penerima subsidi</h3>
               <ul className="mt-4 space-y-2.5">
-                {EDUKASI.syaratSubsidi.map((s) => (
+                {edu.syaratSubsidi.map((s) => (
                   <li key={s} className="flex gap-2.5 text-sm leading-snug text-pine-600">
                     <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-harvest-500" />
                     {s}
                   </li>
                 ))}
+                {edu.syaratSubsidi.length === 0 && (
+                  <li className="text-sm text-pine-400">Data belum tersedia.</li>
+                )}
               </ul>
             </div>
             {/* HET */}
             <div className="rounded-2xl border border-pine-100 bg-paper p-6 shadow-card">
               <h3 className="font-display text-lg font-600 text-pine-800">Harga Eceran Tertinggi</h3>
-              <p className="mt-1.5 text-xs text-pine-500">Bayar tunai di kios resmi—bukan lewat chat.</p>
+              <p className="mt-1.5 text-xs text-pine-500">Bayar tunai di kios resmi, bukan lewat chat.</p>
               <div className="mt-4 space-y-3">
-                {(Object.keys(EDUKASI.het) as Array<keyof typeof EDUKASI.het>).map((j) => (
+                {hetKeys.map((j) => (
                   <div key={j} className="flex items-baseline justify-between border-b border-dashed border-pine-100 pb-2.5">
                     <span className="text-sm font-500 text-pine-700">{j}</span>
-                    <span className="font-mono text-sm font-500 text-pine-800">{formatRupiah(EDUKASI.het[j])}<span className="text-pine-400">/kg</span></span>
+                    <span className="font-mono text-sm font-500 text-pine-800">
+                      {formatRupiah(edu.het[j])}
+                      <span className="text-pine-400">/kg</span>
+                    </span>
                   </div>
                 ))}
+                {hetKeys.length === 0 && <p className="text-sm text-pine-400">Data belum tersedia.</p>}
               </div>
             </div>
             {/* Tips */}
             <div className="rounded-2xl border border-pine-700 bg-pine-700 p-6 text-paper shadow-card">
               <h3 className="font-display text-lg font-600 text-harvest-200">Tips dari penyuluh</h3>
               <ul className="mt-4 space-y-3">
-                {EDUKASI.tips.map((t, i) => (
+                {edu.tips.map((t, i) => (
                   <li key={t} className="flex gap-3 text-sm leading-snug text-pine-100">
                     <span className="font-mono text-xs text-harvest-300">{i + 1}</span>
                     {t}
                   </li>
                 ))}
+                {edu.tips.length === 0 && <li className="text-sm text-pine-200">Data belum tersedia.</li>}
               </ul>
             </div>
           </div>
         </div>
       </section>
 
+      {/* FAQ */}
+      <section id="faq" className="mx-auto max-w-3xl px-5 py-16">
+        <SectionHead eyebrow="Pertanyaan umum" title="Hal yang sering ditanyakan" />
+        <Faq />
+      </section>
+
       {/* CTA */}
-      <section className="mx-auto max-w-6xl px-5 py-20 text-center">
-        <h2 className="mx-auto max-w-xl font-display text-3xl font-600 leading-tight text-pine-800 text-balance md:text-4xl">
-          Siap mengecek jatah pupuk Anda?
-        </h2>
-        <Link
-          href="/asisten"
-          className="group mt-7 inline-flex items-center gap-2 rounded-full bg-harvest-400 px-7 py-3.5 text-sm font-700 text-pine-800 shadow-lift transition hover:bg-harvest-300"
-        >
-          Buka Asisten Tani
-          <ArrowRight size={16} className="transition group-hover:translate-x-0.5" />
-        </Link>
+      <section className="mx-auto max-w-6xl px-5 pb-20 text-center">
+        <div className="rounded-3xl border border-pine-100 bg-white/60 px-6 py-14 shadow-card">
+          <h2 className="mx-auto max-w-xl font-display text-3xl font-600 leading-tight text-pine-800 text-balance md:text-4xl">
+            Siap mengecek jatah pupuk Anda?
+          </h2>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/asisten"
+              className="group inline-flex items-center gap-2 rounded-full bg-harvest-400 px-7 py-3.5 text-sm font-700 text-pine-800 shadow-lift transition hover:bg-harvest-300"
+            >
+              Buka Asisten Tani
+              <ArrowRight size={16} className="transition group-hover:translate-x-0.5" />
+            </Link>
+            <Link
+              href="/daftar"
+              className="inline-flex items-center gap-2 rounded-full border border-pine-300 px-7 py-3.5 text-sm font-700 text-pine-700 transition hover:bg-white/60"
+            >
+              Belum terdaftar? Daftar di sini
+            </Link>
+          </div>
+        </div>
       </section>
 
       {/* FOOTER */}
       <footer className="border-t border-pine-100 bg-paper">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-pine-500 sm:flex-row">
-          <Logo />
-          <p className="text-center text-xs">
-            Prototipe layanan pupuk subsidi · Data demo fiktif · {new Date().getFullYear()}
-          </p>
+        <div className="mx-auto max-w-6xl px-5 py-12">
+          <div className="grid gap-8 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+            <div>
+              <Logo />
+              <p className="mt-3 max-w-xs text-sm leading-relaxed text-pine-500">
+                Layanan digital verifikasi, distribusi, dan edukasi pupuk subsidi berbasis
+                asisten cerdas.
+              </p>
+            </div>
+            <FooterCol
+              title="Layanan"
+              links={[
+                { t: "Cek Kuota", href: "/asisten" },
+                { t: "Daftar Penerima", href: "/daftar" },
+                { t: "Edukasi", href: "/#edukasi" },
+              ]}
+            />
+            <FooterCol
+              title="Informasi"
+              links={[
+                { t: "Cara Kerja", href: "/#cara" },
+                { t: "FAQ", href: "/#faq" },
+                { t: "Sistem", href: "/#sistem" },
+              ]}
+            />
+            <FooterCol
+              title="Internal"
+              links={[{ t: "Portal Petugas", href: "/admin" }]}
+            />
+          </div>
+          <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-pine-100 pt-6 text-xs text-pine-400 sm:flex-row">
+            <p>© {new Date().getFullYear()} Kios Tani Digital · Layanan Pupuk Subsidi</p>
+            <p>Dibangun untuk transparansi penyaluran subsidi.</p>
+          </div>
         </div>
       </footer>
     </main>
+  );
+}
+
+function FooterCol({ title, links }: { title: string; links: { t: string; href: string }[] }) {
+  return (
+    <div>
+      <h4 className="text-xs font-700 uppercase tracking-[0.15em] text-pine-400">{title}</h4>
+      <ul className="mt-3 space-y-2">
+        {links.map((l) => (
+          <li key={l.t}>
+            <Link href={l.href} className="text-sm font-500 text-pine-600 transition hover:text-pine-800">
+              {l.t}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -211,7 +402,7 @@ function ChatPreview() {
             1371042503780001
           </div>
         </div>
-        {/* bubble asisten */}
+        {/* bubble asisten (ilustrasi) */}
         <div className="flex justify-start">
           <div className="max-w-[88%] rounded-2xl rounded-bl-md bg-pine-600 px-3.5 py-3 text-[13px] leading-relaxed text-pine-50">
             Halo <b>Bujang Salim</b> 🌾 Berikut sisa kuota Anda:

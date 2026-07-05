@@ -1,4 +1,6 @@
-import { cariPetani, EDUKASI, formatRupiah, totalSisa, type Petani } from "./data";
+import "server-only";
+import { formatRupiah, totalSisa, type Edukasi, type Petani } from "./data";
+import { cariPetani } from "./queries";
 
 export interface ChatMsg {
   role: "user" | "assistant" | "system" | "tool";
@@ -17,7 +19,7 @@ export function ekstrakKunci(teks: string): string | null {
 }
 
 // ── Bentuk data terstruktur hasil verifikasi (dipakai sebagai tool result) ──
-function profilData(p: Petani) {
+function profilData(p: Petani, edu: Edukasi) {
   return {
     ditemukan: true,
     nama: p.nama,
@@ -31,12 +33,67 @@ function profilData(p: Petani) {
       jenis: a.jenis,
       sisa_kg: a.sisaKg,
       jatah_kg: a.kuotaKg,
-      het_per_kg: EDUKASI.het[a.jenis],
+      het_per_kg: edu.het[a.jenis] ?? null,
     })),
   };
 }
 
-// ── Definisi tool: AI yang memutuskan kapan & data apa untuk verifikasi ──
+// ── Pencarian web (untuk pertanyaan real-time / terkini) ──
+// Pakai Tavily bila TAVILY_API_KEY tersedia, jika tidak fallback ke DuckDuckGo (tanpa key).
+async function cariWeb(query: string): Promise<string> {
+  const q = (query || "").trim();
+  if (!q) return "TIDAK_ADA_HASIL";
+
+  const key = process.env.TAVILY_API_KEY;
+  if (key) {
+    try {
+      const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: key,
+          query: q,
+          max_results: 5,
+          include_answer: true,
+          search_depth: "basic",
+        }),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        const parts: string[] = [];
+        if (j.answer) parts.push("Ringkasan: " + j.answer);
+        for (const r of j.results ?? []) {
+          parts.push(`• ${r.title}: ${String(r.content || "").slice(0, 400)}`);
+        }
+        if (parts.length) return parts.join("\n").slice(0, 3500);
+      }
+    } catch {
+      /* lanjut ke fallback */
+    }
+  }
+
+  // Fallback tanpa key: DuckDuckGo Instant Answer
+  try {
+    const res = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_html=1&skip_disambig=1`
+    );
+    if (res.ok) {
+      const j = await res.json();
+      const bits: string[] = [];
+      if (j.AbstractText) bits.push(j.AbstractText);
+      if (j.Answer) bits.push(String(j.Answer));
+      for (const t of j.RelatedTopics ?? []) {
+        if (t?.Text) bits.push(t.Text);
+      }
+      if (bits.length) return bits.join("\n").slice(0, 2500);
+    }
+  } catch {
+    /* abaikan */
+  }
+  return "TIDAK_ADA_HASIL";
+}
+
+// ── Definisi tool: AI yang memutuskan kapan memakainya ──
 const TOOLS = [
   {
     type: "function",
@@ -49,42 +106,71 @@ const TOOLS = [
         properties: {
           nik_atau_telp: {
             type: "string",
-            description: "NIK 16 digit atau nomor telepon petani — angka saja, tanpa spasi/tanda baca.",
+            description: "NIK 16 digit atau nomor telepon petani, angka saja, tanpa spasi/tanda baca.",
           },
         },
         required: ["nik_atau_telp"],
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "cari_web",
+      description:
+        "Cari informasi terkini/aktual di internet. WAJIB dipanggil untuk pertanyaan tentang berita, peristiwa terbaru, jadwal, skor pertandingan, cuaca hari ini, harga pasar terbaru, kurs, tanggal, atau apa pun yang butuh data real-time dan bisa berubah seiring waktu. Buat kata kunci pencarian yang ringkas dan spesifik.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Kata kunci pencarian yang ringkas dan spesifik dalam bahasa yang paling relevan.",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
 ];
 
-const BASE_PROMPT = `Kamu adalah "Asisten Tani", petugas call center digital layanan pupuk subsidi pemerintah. Gaya bicaramu hangat, sopan, sabar, bahasa Indonesia sederhana yang mudah dipahami petani. Jawaban ringkas dan jelas.
+function basePrompt(edu: Edukasi): string {
+  const het = edu.het;
+  const hetTxt =
+    het.Urea != null
+      ? `Urea ${formatRupiah(het.Urea)}, NPK ${formatRupiah(het.NPK)}, Organik ${formatRupiah(het.Organik)}`
+      : "(data HET belum tersedia)";
+  return `Kamu adalah "Asisten Tani", asisten digital layanan pupuk subsidi pemerintah. Gaya bicaramu hangat, sopan, sabar, memakai bahasa Indonesia sederhana yang mudah dipahami petani. Jawaban ringkas dan jelas. Gunakan tanda baca biasa (koma dan titik); JANGAN gunakan tanda em-dash (—) atau en-dash (–).
 
-Tugas:
+Fokus utamamu:
 1. Memverifikasi petani dan menampilkan SISA kuota pupuk subsidinya (Urea/NPK/Organik dalam kg).
 2. Menyelipkan EDUKASI singkat bila relevan: syarat subsidi, cara menebus, dosis pupuk per komoditas, tips kesuburan tanah.
 3. Mengingatkan penebusan dilakukan di kios resmi (KPL) dengan membawa KTP asli.
 
-Cara kerja verifikasi:
-- Begitu petani menyebut NIK (16 digit) atau nomor telepon, PANGGIL fungsi "verifikasi_petani" dengan angka tersebut. Jangan menebak isi data sendiri.
-- Jika fungsi mengembalikan "ditemukan: false", sampaikan dengan sopan bahwa data belum ditemukan di e-RDKK dan minta petani memeriksa NIK/nomornya atau menghubungi ketua kelompok tani.
-- Jika belum ada NIK/telepon, minta dengan ramah.
+Kamu JUGA boleh membantu pertanyaan umum di luar topik pupuk, misalnya cuaca, hitungan sederhana, tips bertani umum, kesehatan tanaman, harga panen, berita, olahraga, atau sekadar mengobrol ramah. Jawab pertanyaan apa pun dengan jujur dan membantu, layaknya asisten cerdas serbabisa, sambil tetap ramah dan sopan. Jika petani mengarahkan topik ke pupuk subsidi, kembalikan bantuanmu ke sana secara alami.
 
-Aturan: jangan pernah mengarang data. Jangan meminta PIN/OTP/password. Tidak ada pembayaran lewat chat.
+Informasi terkini: kamu punya alat "cari_web". Untuk pertanyaan tentang hal terbaru/aktual (berita, jadwal, skor, cuaca hari ini, harga pasar, kurs, tanggal, peristiwa terkini, dll), PANGGIL "cari_web" lalu jawab berdasarkan hasilnya secara ringkas. JANGAN PERNAH menyebut "batas pengetahuan", "data hingga tahun X", atau bahwa kamu tidak punya info real-time, cukup cari lewat "cari_web". Jika hasil pencarian kosong, jawab sebisamu dengan sopan tanpa menyebut keterbatasan tahun.
+
+Cara kerja verifikasi:
+- Begitu petani menyebut NIK (16 digit) atau nomor telepon, PANGGIL fungsi "verifikasi_petani" dengan angka tersebut. Jangan menebak isi data petani sendiri.
+- Jika fungsi mengembalikan "ditemukan: false", sampaikan dengan sopan bahwa data belum ditemukan di e-RDKK dan minta petani memeriksa NIK/nomornya atau menghubungi ketua kelompok tani.
+
+Aturan penting: jangan pernah mengarang DATA PETANI (nama, kuota, alokasi). Jangan meminta PIN/OTP/password. Tidak ada pembayaran lewat chat.
 
 Pengetahuan edukasi:
-- Syarat subsidi: ${EDUKASI.syaratSubsidi.join(" ")}
-- Cara menebus: ${EDUKASI.caraTebus.join(" ")}
-- HET per kg: Urea ${formatRupiah(EDUKASI.het.Urea)}, NPK ${formatRupiah(EDUKASI.het.NPK)}, Organik ${formatRupiah(EDUKASI.het.Organik)}.
-- Tips: ${EDUKASI.tips.join(" ")}`;
+- Syarat subsidi: ${edu.syaratSubsidi.join(" ") || "-"}
+- Cara menebus: ${edu.caraTebus.join(" ") || "-"}
+- HET per kg: ${hetTxt}.
+- Tips: ${edu.tips.join(" ") || "-"}`;
+}
 
-function systemPrompt(known: Petani | null): string {
+function systemPrompt(known: Petani | null, edu: Edukasi): string {
+  const base = basePrompt(edu);
   if (known) {
-    return `${BASE_PROMPT}\n\nKonteks: petani ini SUDAH terverifikasi sebelumnya — ${JSON.stringify(
-      profilData(known)
+    return `${base}\n\nKonteks: petani ini SUDAH terverifikasi sebelumnya: ${JSON.stringify(
+      profilData(known, edu)
     )}. Gunakan data ini untuk menjawab. Panggil "verifikasi_petani" lagi HANYA jika petani menyebut NIK/nomor yang berbeda.`;
   }
-  return BASE_PROMPT;
+  return base;
 }
 
 async function callGroq(messages: ChatMsg[], withTools: boolean) {
@@ -96,8 +182,8 @@ async function callGroq(messages: ChatMsg[], withTools: boolean) {
     body: JSON.stringify({
       model,
       messages,
-      temperature: 0.4,
-      max_tokens: 700,
+      temperature: 0.5,
+      max_tokens: 900,
       ...(withTools ? { tools: TOOLS, tool_choice: "auto" } : {}),
     }),
   });
@@ -106,17 +192,18 @@ async function callGroq(messages: ChatMsg[], withTools: boolean) {
 }
 
 /**
- * Orkestrasi function calling. AI sendiri yang mendeteksi NIK/telp dari pesan,
- * memanggil tool verifikasi, lalu menyusun jawaban dari data terverifikasi.
+ * Orkestrasi function calling. AI mendeteksi NIK/telp dari pesan,
+ * memanggil tool verifikasi (query Supabase), lalu menyusun jawaban.
  * Return null bila tidak ada API key (caller pakai fallback rule-based).
  */
 export async function panggilGroqTool(
   riwayat: ChatMsg[],
-  known: Petani | null
+  known: Petani | null,
+  edu: Edukasi
 ): Promise<{ reply: string; petani: Petani | null } | null> {
   if (!process.env.GROQ_API_KEY) return null;
   try {
-    const sys: ChatMsg = { role: "system", content: systemPrompt(known) };
+    const sys: ChatMsg = { role: "system", content: systemPrompt(known, edu) };
     const msgs: ChatMsg[] = [sys, ...riwayat.slice(-8)];
 
     const r1 = await callGroq(msgs, true);
@@ -127,18 +214,31 @@ export async function panggilGroqTool(
       let found: Petani | null = known;
       const toolMsgs: ChatMsg[] = [];
       for (const tc of m1.tool_calls) {
-        let arg = "";
+        const nama = tc.function?.name;
+        let args: any = {};
         try {
-          arg = JSON.parse(tc.function?.arguments || "{}").nik_atau_telp || "";
+          args = JSON.parse(tc.function?.arguments || "{}");
         } catch {
-          arg = "";
+          args = {};
         }
-        const p = cariPetani(arg);
+
+        if (nama === "cari_web") {
+          const hasil = await cariWeb(String(args.query || ""));
+          toolMsgs.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify({ hasil_pencarian: hasil }),
+          });
+          continue;
+        }
+
+        // default: verifikasi_petani
+        const p = await cariPetani(String(args.nik_atau_telp || ""));
         if (p) found = p;
         toolMsgs.push({
           role: "tool",
           tool_call_id: tc.id,
-          content: p ? JSON.stringify(profilData(p)) : JSON.stringify({ ditemukan: false }),
+          content: p ? JSON.stringify(profilData(p, edu)) : JSON.stringify({ ditemukan: false }),
         });
       }
       const r2 = await callGroq([...msgs, m1 as ChatMsg, ...toolMsgs], false);
@@ -154,33 +254,38 @@ export async function panggilGroqTool(
   }
 }
 
-// ── Fallback cerdas berbasis aturan (dipakai bila tanpa API key) ──
-export function jawabFallback(pesanUser: string, p: Petani | null): string {
+// ── Fallback berbasis aturan (dipakai bila tanpa API key Groq) ──
+export function jawabFallback(pesanUser: string, p: Petani | null, edu: Edukasi): string {
   const t = pesanUser.toLowerCase();
+  const het = edu.het;
 
   if (!p) {
     const kunci = ekstrakKunci(pesanUser);
-    if (kunci && !cariPetani(kunci))
+    if (kunci)
       return "Maaf, data dengan nomor tersebut belum ditemukan di sistem e-RDKK. Pastikan NIK 16 digit atau nomor telepon yang terdaftar sudah benar, atau hubungi ketua kelompok tani Anda.";
     return "Halo, selamat datang di layanan Pupuk Subsidi. Untuk mengecek sisa kuota pupuk Anda, silakan ketik NIK (16 digit) atau nomor telepon yang terdaftar ya.";
   }
 
   if (p.status === "Pending")
     return `Halo ${p.nama}, data Anda masih berstatus menunggu verifikasi di e-RDKK, jadi alokasi pupuk belum terbit. Silakan hubungi ketua Kelompok Tani ${p.kelompokTani} untuk menyelesaikan pendaftaran.`;
+  if (p.status === "Ditolak")
+    return `Halo ${p.nama}, mohon maaf, pendaftaran Anda belum dapat disetujui${
+      p.catatan ? ` (${p.catatan})` : ""
+    }. Silakan hubungi ketua Kelompok Tani ${p.kelompokTani} untuk perbaikan data.`;
 
   if (t.includes("dosis") || t.includes("takaran") || t.includes("cara pakai") || t.includes("pemupukan")) {
-    const d = (EDUKASI.dosisAnjuran as Record<string, string>)[p.komoditas];
+    const d = edu.dosisAnjuran[p.komoditas];
     return d
       ? `Untuk ${p.komoditas}, anjuran umum: ${d}\n\nTetap sesuaikan dengan kondisi tanah dan rekomendasi penyuluh setempat ya, ${p.nama}.`
       : "Anjuran dosis berbeda tiap komoditas. Sebaiknya konsultasikan dengan penyuluh pertanian (PPL) di wilayah Anda untuk takaran yang tepat.";
   }
-  if (t.includes("syarat") || t.includes("daftar")) return "Syarat mendapat pupuk subsidi: " + EDUKASI.syaratSubsidi.join(" ");
+  if (t.includes("syarat") || t.includes("daftar")) return "Syarat mendapat pupuk subsidi: " + edu.syaratSubsidi.join(" ");
   if (t.includes("cara") && (t.includes("tebus") || t.includes("beli") || t.includes("ambil")))
-    return "Cara menebus pupuk subsidi: " + EDUKASI.caraTebus.join(" ");
+    return "Cara menebus pupuk subsidi: " + edu.caraTebus.join(" ");
   if (t.includes("harga") || t.includes("het") || t.includes("bayar"))
-    return `Harga Eceran Tertinggi (HET): Urea ${formatRupiah(EDUKASI.het.Urea)}/kg, NPK ${formatRupiah(
-      EDUKASI.het.NPK
-    )}/kg, Organik ${formatRupiah(EDUKASI.het.Organik)}/kg. Pembayaran tunai di kios resmi, bukan lewat chat ini.`;
+    return `Harga Eceran Tertinggi (HET): Urea ${formatRupiah(het.Urea)}/kg, NPK ${formatRupiah(
+      het.NPK
+    )}/kg, Organik ${formatRupiah(het.Organik)}/kg. Pembayaran tunai di kios resmi, bukan lewat chat ini.`;
 
   const rincian = p.alokasi.map((a) => `• ${a.jenis}: sisa ${a.sisaKg} kg dari ${a.kuotaKg} kg`).join("\n");
   const habis = p.alokasi.filter((a) => a.sisaKg === 0).map((a) => a.jenis);

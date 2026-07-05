@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kios Tani Digital — Layanan Pupuk Subsidi",
+  title: "Kios Tani Digital · Layanan Pupuk Subsidi",
   description:
-    "Cek kuota pupuk subsidi Anda lewat asisten digital. Cepat, transparan, dan mengedukasi — tinggal masukkan NIK.",
+    "Cek kuota pupuk subsidi Anda lewat asisten digital. Cepat, transparan, dan mengedukasi. Cukup masukkan NIK.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

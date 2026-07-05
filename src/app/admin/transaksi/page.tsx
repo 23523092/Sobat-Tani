@@ -1,4 +1,7 @@
-import { TRANSAKSI, formatRupiah } from "@/lib/data";
+import { formatRupiah } from "@/lib/data";
+import { getTransaksi } from "@/lib/queries";
+
+export const dynamic = "force-dynamic";
 
 function tgl(iso: string) {
   return new Date(iso).toLocaleDateString("id-ID", {
@@ -10,9 +13,10 @@ function tgl(iso: string) {
   });
 }
 
-export default function TransaksiPage() {
-  const total = TRANSAKSI.reduce((a, t) => a + t.total, 0);
-  const totalKg = TRANSAKSI.reduce((a, t) => a + t.jumlahKg, 0);
+export default async function TransaksiPage() {
+  const transaksi = await getTransaksi();
+  const total = transaksi.reduce((a, t) => a + t.total, 0);
+  const totalKg = transaksi.reduce((a, t) => a + t.jumlahKg, 0);
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8 md:px-10">
@@ -48,18 +52,26 @@ export default function TransaksiPage() {
               </tr>
             </thead>
             <tbody>
-              {[...TRANSAKSI].reverse().map((t) => (
-                <tr key={t.id} className="border-b border-pine-50 transition last:border-0 hover:bg-sage/40">
-                  <td className="px-5 py-3.5 font-mono text-xs text-pine-500">{t.id}</td>
-                  <td className="px-5 py-3.5 font-600 text-pine-800">{t.nama}</td>
-                  <td className="px-5 py-3.5 text-pine-600">
-                    <span className="font-mono text-xs">{t.jumlahKg} kg</span> {t.jenis}
+              {transaksi.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-12 text-center text-sm text-pine-400">
+                    Belum ada transaksi penebusan.
                   </td>
-                  <td className="px-5 py-3.5 text-pine-600">{t.kios}</td>
-                  <td className="px-5 py-3.5 text-xs text-pine-400">{tgl(t.tanggal)}</td>
-                  <td className="px-5 py-3.5 text-right font-mono text-pine-700">{formatRupiah(t.total)}</td>
                 </tr>
-              ))}
+              ) : (
+                [...transaksi].reverse().map((t) => (
+                  <tr key={t.id} className="border-b border-pine-50 transition last:border-0 hover:bg-sage/40">
+                    <td className="px-5 py-3.5 font-mono text-xs text-pine-500">{t.id}</td>
+                    <td className="px-5 py-3.5 font-600 text-pine-800">{t.nama}</td>
+                    <td className="px-5 py-3.5 text-pine-600">
+                      <span className="font-mono text-xs">{t.jumlahKg} kg</span> {t.jenis}
+                    </td>
+                    <td className="px-5 py-3.5 text-pine-600">{t.kios}</td>
+                    <td className="px-5 py-3.5 text-xs text-pine-400">{tgl(t.tanggal)}</td>
+                    <td className="px-5 py-3.5 text-right font-mono text-pine-700">{formatRupiah(t.total)}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
