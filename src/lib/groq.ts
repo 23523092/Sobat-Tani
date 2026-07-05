@@ -49,23 +49,27 @@ async function cariWeb(query: string): Promise<string> {
     try {
       const res = await fetch("https://api.tavily.com/search", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        // Kirim key via header (standar Tavily terbaru) + body (kompat lama).
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
         body: JSON.stringify({
           api_key: key,
           query: q,
-          max_results: 5,
-          include_answer: true,
-          search_depth: "basic",
+          max_results: 6,
+          include_answer: "advanced",
+          search_depth: "advanced",
         }),
       });
       if (res.ok) {
         const j = await res.json();
         const parts: string[] = [];
-        if (j.answer) parts.push("Ringkasan: " + j.answer);
+        if (j.answer) parts.push("JAWABAN RINGKAS: " + j.answer);
         for (const r of j.results ?? []) {
-          parts.push(`• ${r.title}: ${String(r.content || "").slice(0, 400)}`);
+          parts.push(`• ${r.title}: ${String(r.content || "").slice(0, 500)}`);
         }
-        if (parts.length) return parts.join("\n").slice(0, 3500);
+        if (parts.length) return parts.join("\n").slice(0, 4000);
       }
     } catch {
       /* lanjut ke fallback */
@@ -148,7 +152,7 @@ Fokus utamamu:
 
 Kamu JUGA boleh membantu pertanyaan umum di luar topik pupuk, misalnya cuaca, hitungan sederhana, tips bertani umum, kesehatan tanaman, harga panen, berita, olahraga, atau sekadar mengobrol ramah. Jawab pertanyaan apa pun dengan jujur dan membantu, layaknya asisten cerdas serbabisa, sambil tetap ramah dan sopan. Jika petani mengarahkan topik ke pupuk subsidi, kembalikan bantuanmu ke sana secara alami.
 
-Informasi terkini: kamu punya alat "cari_web". Untuk pertanyaan tentang hal terbaru/aktual (berita, jadwal, skor, cuaca hari ini, harga pasar, kurs, tanggal, peristiwa terkini, dll), PANGGIL "cari_web" lalu jawab berdasarkan hasilnya secara ringkas. JANGAN PERNAH menyebut "batas pengetahuan", "data hingga tahun X", atau bahwa kamu tidak punya info real-time, cukup cari lewat "cari_web". Jika hasil pencarian kosong, jawab sebisamu dengan sopan tanpa menyebut keterbatasan tahun.
+Informasi terkini: kamu punya alat "cari_web". Untuk pertanyaan tentang hal terbaru/aktual (berita, jadwal, skor, cuaca hari ini, harga pasar, kurs, tanggal, peristiwa terkini, dll), PANGGIL "cari_web" lalu jawab BERDASARKAN HASILNYA. Aturan ketat soal fakta terkini: gunakan HANYA angka, nama, dan detail yang muncul di hasil "cari_web" — JANGAN menambah atau menebak angka/fakta dari ingatanmu (mis. jumlah tim, tanggal, skor). Jika hasil pencarian kurang lengkap, sampaikan bagian yang kamu temukan saja lalu sarankan cek sumber resmi, jangan mengarang sisanya. JANGAN PERNAH menyebut "batas pengetahuan", "data hingga tahun X", atau bahwa kamu tidak punya info real-time — cukup cari lewat "cari_web".
 
 Cara kerja verifikasi:
 - Begitu petani menyebut NIK (16 digit) atau nomor telepon, PANGGIL fungsi "verifikasi_petani" dengan angka tersebut. Jangan menebak isi data petani sendiri.
