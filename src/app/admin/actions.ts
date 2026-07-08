@@ -115,6 +115,22 @@ export async function ubahStatusPetani(
   }
 }
 
+// ── Hapus petani permanen (cascade: alokasi + transaksi ikut terhapus) ──────
+export async function hapusPetani(nik: string): Promise<ActionResult> {
+  const guard = await requirePetugas();
+  if (guard) return guard;
+  try {
+    const sb = createSupabaseAdmin();
+    // alokasi & transaksi punya FK on delete cascade → cukup hapus baris petani.
+    const del = await sb.from("petani").delete().eq("nik", nik);
+    if (del.error) return { ok: false, error: del.error.message };
+    revalAdmin();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // ── Catat penebusan: validasi sisa → kurangi → insert transaksi ─────────────
 export async function catatTebus(
   nik: string,

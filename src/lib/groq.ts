@@ -137,6 +137,16 @@ const TOOLS = [
   },
 ];
 
+function tanggalHariIni(): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date());
+}
+
 function basePrompt(edu: Edukasi): string {
   const het = edu.het;
   const hetTxt =
@@ -145,6 +155,8 @@ function basePrompt(edu: Edukasi): string {
       : "(data HET belum tersedia)";
   return `Kamu adalah "Asisten Tani", asisten digital layanan pupuk subsidi pemerintah. Gaya bicaramu hangat, sopan, sabar, memakai bahasa Indonesia sederhana yang mudah dipahami petani. Jawaban ringkas dan jelas. Gunakan tanda baca biasa (koma dan titik); JANGAN gunakan tanda em-dash (—) atau en-dash (–).
 
+Tanggal hari ini: ${tanggalHariIni()} (WIB). Pakai ini sebagai acuan waktu; jangan mengklaim tahun/tanggal lain dari ingatanmu.
+
 Fokus utamamu:
 1. Memverifikasi petani dan menampilkan SISA kuota pupuk subsidinya (Urea/NPK/Organik dalam kg).
 2. Menyelipkan EDUKASI singkat bila relevan: syarat subsidi, cara menebus, dosis pupuk per komoditas, tips kesuburan tanah.
@@ -152,7 +164,13 @@ Fokus utamamu:
 
 Kamu JUGA boleh membantu pertanyaan umum di luar topik pupuk, misalnya cuaca, hitungan sederhana, tips bertani umum, kesehatan tanaman, harga panen, berita, olahraga, atau sekadar mengobrol ramah. Jawab pertanyaan apa pun dengan jujur dan membantu, layaknya asisten cerdas serbabisa, sambil tetap ramah dan sopan. Jika petani mengarahkan topik ke pupuk subsidi, kembalikan bantuanmu ke sana secara alami.
 
-Informasi terkini: kamu punya alat "cari_web". Untuk pertanyaan tentang hal terbaru/aktual (berita, jadwal, skor, cuaca hari ini, harga pasar, kurs, tanggal, peristiwa terkini, dll), PANGGIL "cari_web" lalu jawab BERDASARKAN HASILNYA. Aturan ketat soal fakta terkini: gunakan HANYA angka, nama, dan detail yang muncul di hasil "cari_web" — JANGAN menambah atau menebak angka/fakta dari ingatanmu (mis. jumlah tim, tanggal, skor). Jika hasil pencarian kurang lengkap, sampaikan bagian yang kamu temukan saja lalu sarankan cek sumber resmi, jangan mengarang sisanya. JANGAN PERNAH menyebut "batas pengetahuan", "data hingga tahun X", atau bahwa kamu tidak punya info real-time — cukup cari lewat "cari_web".
+Informasi terkini: kamu punya alat "cari_web". Untuk pertanyaan apa pun yang menyangkut fakta di dunia nyata yang bisa berubah (berita, jadwal, skor/hasil pertandingan, klasemen, cuaca, harga pasar, kurs, siapa pemenang/juara, peristiwa terkini, dll), kamu WAJIB memanggil "cari_web" DULU sebelum menjawab. DILARANG menjawab fakta seperti ini dari ingatanmu.
+
+ATURAN ANTI-NGARANG (paling penting, tidak bisa ditawar):
+- Jawab HANYA berdasarkan isi hasil "cari_web". Setiap angka, nama tim/orang, skor, tanggal, dan daftar harus benar-benar ada di hasil pencarian. Dilarang menambah, melengkapi, atau menebak dari ingatanmu.
+- Jika hasil "cari_web" bertuliskan "TIDAK_ADA_HASIL" atau tidak memuat jawaban yang diminta: JANGAN mengarang. Katakan terus terang bahwa kamu belum menemukan data terbaru untuk itu saat ini, dan sarankan petani mengecek sumber resmi. Lebih baik mengaku tidak tahu daripada memberi jawaban salah.
+- Jika petani mengoreksi (mis. "bukannya tim itu sudah kalah?"), JANGAN sekadar mengubah-ubah daftar tebakan. Panggil "cari_web" lagi dengan kata kunci yang lebih spesifik, lalu jawab dari hasil baru itu.
+- JANGAN PERNAH menyebut "batas pengetahuan", "data hingga tahun X", atau bahwa kamu tidak punya info real-time. Cukup pakai "cari_web".
 
 Cara kerja verifikasi:
 - Begitu petani menyebut NIK (16 digit) atau nomor telepon, PANGGIL fungsi "verifikasi_petani" dengan angka tersebut. Jangan menebak isi data petani sendiri.
@@ -210,14 +228,23 @@ export async function panggilGroqTool(
     const sys: ChatMsg = { role: "system", content: systemPrompt(known, edu) };
     const msgs: ChatMsg[] = [sys, ...riwayat.slice(-8)];
 
-    const r1 = await callGroq(msgs, true);
-    const m1 = r1?.choices?.[0]?.message;
-    if (!m1) return null;
+    let found: Petani | null = known;
 
-    if (m1.tool_calls?.length) {
-      let found: Petani | null = known;
-      const toolMsgs: ChatMsg[] = [];
-      for (const tc of m1.tool_calls) {
+    // Loop bertahap: biarkan model memakai tool sampai 3 putaran, mis. cari_web
+    // lalu cari lagi bila hasil pertama kurang, atau verifikasi + cari sekaligus.
+    const MAX_PUTARAN = 3;
+    for (let putaran = 0; putaran < MAX_PUTARAN; putaran++) {
+      const r = await callGroq(msgs, true);
+      const m = r?.choices?.[0]?.message;
+      if (!m) return null;
+
+      if (!m.tool_calls?.length) {
+        if (!m.content) return null;
+        return { reply: m.content, petani: found };
+      }
+
+      msgs.push(m as ChatMsg);
+      for (const tc of m.tool_calls) {
         const nama = tc.function?.name;
         let args: any = {};
         try {
@@ -228,10 +255,16 @@ export async function panggilGroqTool(
 
         if (nama === "cari_web") {
           const hasil = await cariWeb(String(args.query || ""));
-          toolMsgs.push({
+          const kosong = !hasil || hasil === "TIDAK_ADA_HASIL";
+          msgs.push({
             role: "tool",
             tool_call_id: tc.id,
-            content: JSON.stringify({ hasil_pencarian: hasil }),
+            content: JSON.stringify({
+              hasil_pencarian: hasil,
+              instruksi: kosong
+                ? "Pencarian tidak menemukan data. JANGAN mengarang jawaban. Katakan terus terang belum menemukan info terbaru dan sarankan cek sumber resmi."
+                : "Jawab HANYA dari hasil di atas. Dilarang menambah angka/nama/fakta yang tidak tertera di sini.",
+            }),
           });
           continue;
         }
@@ -239,20 +272,19 @@ export async function panggilGroqTool(
         // default: verifikasi_petani
         const p = await cariPetani(String(args.nik_atau_telp || ""));
         if (p) found = p;
-        toolMsgs.push({
+        msgs.push({
           role: "tool",
           tool_call_id: tc.id,
           content: p ? JSON.stringify(profilData(p, edu)) : JSON.stringify({ ditemukan: false }),
         });
       }
-      const r2 = await callGroq([...msgs, m1 as ChatMsg, ...toolMsgs], false);
-      const reply = r2?.choices?.[0]?.message?.content;
-      if (!reply) return null;
-      return { reply, petani: found };
     }
 
-    if (!m1.content) return null;
-    return { reply: m1.content, petani: known };
+    // Putaran habis: minta jawaban final tanpa tool (paksa merangkum hasil).
+    const rFinal = await callGroq(msgs, false);
+    const reply = rFinal?.choices?.[0]?.message?.content;
+    if (!reply) return null;
+    return { reply, petani: found };
   } catch {
     return null;
   }

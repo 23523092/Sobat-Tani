@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, Trash2, AlertTriangle } from "lucide-react";
 import { totalSisa, type Petani, type StatusPetani } from "@/lib/data";
-import { ubahStatusPetani } from "@/app/admin/actions";
+import { ubahStatusPetani, hapusPetani } from "@/app/admin/actions";
 
 const FILTERS: (StatusPetani | "Semua")[] = ["Semua", "Terdaftar", "Pending", "Ditolak"];
 
@@ -19,6 +19,9 @@ export function PetaniTable({ petani }: { petani: Petani[] }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<(StatusPetani | "Semua")>("Semua");
   const [busy, setBusy] = useState<string | null>(null);
+  const [target, setTarget] = useState<Petani | null>(null);
+  const [konfirmasi, setKonfirmasi] = useState("");
+  const [errHapus, setErrHapus] = useState<string | null>(null);
   const [, start] = useTransition();
 
   const rows = useMemo(() => {
@@ -41,6 +44,29 @@ export function PetaniTable({ petani }: { petani: Petani[] }) {
       await ubahStatusPetani(nik, status);
       setBusy(null);
       router.refresh();
+    });
+  }
+
+  function bukaHapus(p: Petani) {
+    setTarget(p);
+    setKonfirmasi("");
+    setErrHapus(null);
+  }
+
+  function konfirmasiHapus() {
+    if (!target || konfirmasi.trim() !== target.nik) return;
+    const nik = target.nik;
+    setBusy(nik);
+    setErrHapus(null);
+    start(async () => {
+      const res = await hapusPetani(nik);
+      setBusy(null);
+      if (res.ok) {
+        setTarget(null);
+        router.refresh();
+      } else {
+        setErrHapus(res.error ?? "Gagal menghapus.");
+      }
     });
   }
 
@@ -141,6 +167,14 @@ export function PetaniTable({ petani }: { petani: Petani[] }) {
                           <option value="Pending">Pending</option>
                           <option value="Ditolak">Ditolak</option>
                         </select>
+                        <button
+                          onClick={() => bukaHapus(p)}
+                          disabled={busy === p.nik}
+                          title="Hapus petani permanen"
+                          className="rounded-lg border border-clay/30 p-1.5 text-clay transition hover:bg-clay/10 disabled:opacity-50"
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -150,6 +184,58 @@ export function PetaniTable({ petani }: { petani: Petani[] }) {
           </table>
         </div>
       </div>
+
+      {/* modal konfirmasi hapus */}
+      {target && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-pine-900/40 p-4"
+          onClick={() => busy !== target.nik && setTarget(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-paper p-6 shadow-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center gap-2 text-clay">
+              <AlertTriangle size={20} />
+              <h3 className="text-base font-700">Hapus petani permanen</h3>
+            </div>
+            <p className="text-sm text-pine-600">
+              Menghapus <span className="font-600 text-pine-800">{target.nama}</span> akan
+              menghapus <span className="font-600">alokasi kuota</span> dan{" "}
+              <span className="font-600">seluruh riwayat penebusannya</span> secara permanen.
+              Tindakan ini tidak bisa dibatalkan.
+            </p>
+            <p className="mt-3 text-xs text-pine-500">
+              Ketik NIK <span className="font-mono font-600 text-pine-700">{target.nik}</span> untuk
+              konfirmasi:
+            </p>
+            <input
+              autoFocus
+              value={konfirmasi}
+              onChange={(e) => setKonfirmasi(e.target.value)}
+              placeholder="Ketik NIK di sini…"
+              className="mt-2 w-full rounded-xl border border-pine-200 bg-white px-3 py-2.5 font-mono text-sm text-pine-800 outline-none focus:border-clay"
+            />
+            {errHapus && <p className="mt-2 text-xs text-clay">{errHapus}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setTarget(null)}
+                disabled={busy === target.nik}
+                className="rounded-xl border border-pine-200 px-4 py-2 text-sm font-600 text-pine-600 transition hover:bg-white disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={konfirmasiHapus}
+                disabled={konfirmasi.trim() !== target.nik || busy === target.nik}
+                className="rounded-xl bg-clay px-4 py-2 text-sm font-600 text-paper transition hover:bg-clay/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {busy === target.nik ? "Menghapus…" : "Hapus permanen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
