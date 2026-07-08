@@ -4,6 +4,7 @@ import { cariPetani, getEdukasi } from "@/lib/queries";
 import { ekstrakKunci, jawabFallback, panggilGroqTool, type ChatMsg } from "@/lib/groq";
 
 export const runtime = "nodejs";
+export const maxDuration = 30; // detik — beri ruang untuk beberapa panggilan Groq
 
 // Jaring pengaman: bersihkan em-dash/en-dash dari jawaban (model kadang tetap memakainya).
 function tanpaDash(t: string): string {
@@ -79,7 +80,8 @@ export async function POST(req: NextRequest) {
       verified: !!petani,
       mode: "fallback",
     });
-  } catch {
+  } catch (e) {
+    console.error("[api/chat] error:", (e as Error)?.message || e);
     return NextResponse.json(
       { reply: "Maaf, sistem sedang sibuk. Coba lagi sebentar ya.", verified: false, mode: "error" },
       { status: 200 }

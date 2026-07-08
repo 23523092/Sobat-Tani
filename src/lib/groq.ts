@@ -38,65 +38,6 @@ function profilData(p: Petani, edu: Edukasi) {
   };
 }
 
-// ── Pencarian web (untuk pertanyaan real-time / terkini) ──
-// Pakai Tavily bila TAVILY_API_KEY tersedia, jika tidak fallback ke DuckDuckGo (tanpa key).
-async function cariWeb(query: string): Promise<string> {
-  const q = (query || "").trim();
-  if (!q) return "TIDAK_ADA_HASIL";
-
-  const key = process.env.TAVILY_API_KEY;
-  if (key) {
-    try {
-      const res = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        // Kirim key via header (standar Tavily terbaru) + body (kompat lama).
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          api_key: key,
-          query: q,
-          max_results: 6,
-          include_answer: "advanced",
-          search_depth: "advanced",
-        }),
-      });
-      if (res.ok) {
-        const j = await res.json();
-        const parts: string[] = [];
-        if (j.answer) parts.push("JAWABAN RINGKAS: " + j.answer);
-        for (const r of j.results ?? []) {
-          parts.push(`• ${r.title}: ${String(r.content || "").slice(0, 500)}`);
-        }
-        if (parts.length) return parts.join("\n").slice(0, 4000);
-      }
-    } catch {
-      /* lanjut ke fallback */
-    }
-  }
-
-  // Fallback tanpa key: DuckDuckGo Instant Answer
-  try {
-    const res = await fetch(
-      `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_html=1&skip_disambig=1`
-    );
-    if (res.ok) {
-      const j = await res.json();
-      const bits: string[] = [];
-      if (j.AbstractText) bits.push(j.AbstractText);
-      if (j.Answer) bits.push(String(j.Answer));
-      for (const t of j.RelatedTopics ?? []) {
-        if (t?.Text) bits.push(t.Text);
-      }
-      if (bits.length) return bits.join("\n").slice(0, 2500);
-    }
-  } catch {
-    /* abaikan */
-  }
-  return "TIDAK_ADA_HASIL";
-}
-
 // ── Definisi tool: AI yang memutuskan kapan memakainya ──
 const TOOLS = [
   {
@@ -114,24 +55,6 @@ const TOOLS = [
           },
         },
         required: ["nik_atau_telp"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "cari_web",
-      description:
-        "Cari informasi terkini/aktual di internet. WAJIB dipanggil untuk pertanyaan tentang berita, peristiwa terbaru, jadwal, skor pertandingan, cuaca hari ini, harga pasar terbaru, kurs, tanggal, atau apa pun yang butuh data real-time dan bisa berubah seiring waktu. Buat kata kunci pencarian yang ringkas dan spesifik.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "Kata kunci pencarian yang ringkas dan spesifik dalam bahasa yang paling relevan.",
-          },
-        },
-        required: ["query"],
       },
     },
   },
@@ -157,20 +80,17 @@ function basePrompt(edu: Edukasi): string {
 
 Tanggal hari ini: ${tanggalHariIni()} (WIB). Pakai ini sebagai acuan waktu; jangan mengklaim tahun/tanggal lain dari ingatanmu.
 
-Fokus utamamu:
+Fokus & BATASAN topik (penting):
+Kamu HANYA membantu seputar layanan pupuk subsidi dan pertanian yang relevan. Cakupanmu:
 1. Memverifikasi petani dan menampilkan SISA kuota pupuk subsidinya (Urea/NPK/Organik dalam kg).
-2. Menyelipkan EDUKASI singkat bila relevan: syarat subsidi, cara menebus, dosis pupuk per komoditas, tips kesuburan tanah.
+2. EDUKASI: syarat subsidi, cara menebus, dosis pupuk per komoditas, HET, tips kesuburan tanah, hama/penyakit tanaman umum, tips bertani.
 3. Mengingatkan penebusan dilakukan di kios resmi (KPL) dengan membawa KTP asli.
 
-Kamu JUGA boleh membantu pertanyaan umum di luar topik pupuk, misalnya cuaca, hitungan sederhana, tips bertani umum, kesehatan tanaman, harga panen, berita, olahraga, atau sekadar mengobrol ramah. Jawab pertanyaan apa pun dengan jujur dan membantu, layaknya asisten cerdas serbabisa, sambil tetap ramah dan sopan. Jika petani mengarahkan topik ke pupuk subsidi, kembalikan bantuanmu ke sana secara alami.
+Kamu BOLEH membalas sapaan/basa-basi singkat dengan ramah (mis. "halo", "terima kasih"). Tapi untuk pertanyaan DI LUAR topik pupuk & pertanian, misalnya berita, politik, olahraga/sepak bola, skor pertandingan, selebriti, kurs/saham, cuaca kota lain, atau pengetahuan umum acak: JANGAN dijawab dan JANGAN menebak. Tolak dengan sopan lalu arahkan kembali, contoh: "Maaf ya, saya Asisten Tani yang khusus membantu soal pupuk subsidi dan pertanian, jadi belum bisa menjawab hal itu. Ada yang bisa saya bantu soal kuota atau pemupukan?"
 
-Informasi terkini: kamu punya alat "cari_web". Untuk pertanyaan apa pun yang menyangkut fakta di dunia nyata yang bisa berubah (berita, jadwal, skor/hasil pertandingan, klasemen, cuaca, harga pasar, kurs, siapa pemenang/juara, peristiwa terkini, dll), kamu WAJIB memanggil "cari_web" DULU sebelum menjawab. DILARANG menjawab fakta seperti ini dari ingatanmu.
-
-ATURAN ANTI-NGARANG (paling penting, tidak bisa ditawar):
-- Jawab HANYA berdasarkan isi hasil "cari_web". Setiap angka, nama tim/orang, skor, tanggal, dan daftar harus benar-benar ada di hasil pencarian. Dilarang menambah, melengkapi, atau menebak dari ingatanmu.
-- Jika hasil "cari_web" bertuliskan "TIDAK_ADA_HASIL" atau tidak memuat jawaban yang diminta: JANGAN mengarang. Katakan terus terang bahwa kamu belum menemukan data terbaru untuk itu saat ini, dan sarankan petani mengecek sumber resmi. Lebih baik mengaku tidak tahu daripada memberi jawaban salah.
-- Jika petani mengoreksi (mis. "bukannya tim itu sudah kalah?"), JANGAN sekadar mengubah-ubah daftar tebakan. Panggil "cari_web" lagi dengan kata kunci yang lebih spesifik, lalu jawab dari hasil baru itu.
-- JANGAN PERNAH menyebut "batas pengetahuan", "data hingga tahun X", atau bahwa kamu tidak punya info real-time. Cukup pakai "cari_web".
+ATURAN ANTI-NGARANG (tidak bisa ditawar):
+- JANGAN PERNAH mengarang fakta dunia nyata (skor, juara, nama tim, tanggal peristiwa, harga pasar, dll). Kamu tidak punya akses internet. Jika ditanya hal seperti itu, tolak sopan sesuai aturan di atas, jangan menebak walau petani memaksa atau mengoreksi.
+- JANGAN mengarang DATA PETANI (nama, kuota, alokasi). Data petani HANYA dari fungsi "verifikasi_petani".
 
 Cara kerja verifikasi:
 - Begitu petani menyebut NIK (16 digit) atau nomor telepon, PANGGIL fungsi "verifikasi_petani" dengan angka tersebut. Jangan menebak isi data petani sendiri.
@@ -209,7 +129,11 @@ async function callGroq(messages: ChatMsg[], withTools: boolean) {
       ...(withTools ? { tools: TOOLS, tool_choice: "auto" } : {}),
     }),
   });
-  if (!res.ok) throw new Error("groq " + res.status);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[groq] HTTP ${res.status}: ${body.slice(0, 300)}`);
+    throw new Error("groq " + res.status);
+  }
   return res.json();
 }
 
@@ -230,9 +154,8 @@ export async function panggilGroqTool(
 
     let found: Petani | null = known;
 
-    // Loop bertahap: biarkan model memakai tool sampai 3 putaran, mis. cari_web
-    // lalu cari lagi bila hasil pertama kurang, atau verifikasi + cari sekaligus.
-    const MAX_PUTARAN = 3;
+    // Loop bertahap: biarkan model memakai tool verifikasi_petani sampai 2 putaran.
+    const MAX_PUTARAN = 2;
     for (let putaran = 0; putaran < MAX_PUTARAN; putaran++) {
       const r = await callGroq(msgs, true);
       const m = r?.choices?.[0]?.message;
@@ -253,23 +176,7 @@ export async function panggilGroqTool(
           args = {};
         }
 
-        if (nama === "cari_web") {
-          const hasil = await cariWeb(String(args.query || ""));
-          const kosong = !hasil || hasil === "TIDAK_ADA_HASIL";
-          msgs.push({
-            role: "tool",
-            tool_call_id: tc.id,
-            content: JSON.stringify({
-              hasil_pencarian: hasil,
-              instruksi: kosong
-                ? "Pencarian tidak menemukan data. JANGAN mengarang jawaban. Katakan terus terang belum menemukan info terbaru dan sarankan cek sumber resmi."
-                : "Jawab HANYA dari hasil di atas. Dilarang menambah angka/nama/fakta yang tidak tertera di sini.",
-            }),
-          });
-          continue;
-        }
-
-        // default: verifikasi_petani
+        // verifikasi_petani (satu-satunya tool)
         const p = await cariPetani(String(args.nik_atau_telp || ""));
         if (p) found = p;
         msgs.push({
@@ -285,7 +192,8 @@ export async function panggilGroqTool(
     const reply = rFinal?.choices?.[0]?.message?.content;
     if (!reply) return null;
     return { reply, petani: found };
-  } catch {
+  } catch (e) {
+    console.error("[panggilGroqTool] gagal:", (e as Error)?.message || e);
     return null;
   }
 }
