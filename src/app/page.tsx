@@ -31,7 +31,7 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-paper bg-grain">
       {/* NAV */}
-      <header className="sticky top-0 z-30 border-b border-pine-100/70 bg-paper/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 transform-gpu border-b border-pine-100/70 bg-paper/80 backdrop-blur-md [will-change:transform]">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
           <Logo />
           <div className="hidden items-center gap-8 text-sm font-500 text-pine-600 md:flex">
