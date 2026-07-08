@@ -5,6 +5,11 @@ import { ekstrakKunci, jawabFallback, panggilGroqTool, type ChatMsg } from "@/li
 
 export const runtime = "nodejs";
 
+// Jaring pengaman: bersihkan em-dash/en-dash dari jawaban (model kadang tetap memakainya).
+function tanpaDash(t: string): string {
+  return t.replace(/\s*—\s*/g, ", ").replace(/\s*–\s*/g, "-");
+}
+
 // ── Rate limit sederhana per-IP (in-memory) — kurangi abuse/enumerasi ──
 const HITS = new Map<string, number[]>();
 const RATE_LIMIT = 20; // pesan
@@ -52,7 +57,7 @@ export async function POST(req: NextRequest) {
     if (hasil) {
       const p = hasil.petani;
       return NextResponse.json({
-        reply: hasil.reply,
+        reply: tanpaDash(hasil.reply),
         nik: p?.nik ?? nik,
         verified: !!p,
         mode: "groq",
@@ -69,7 +74,7 @@ export async function POST(req: NextRequest) {
       }
     }
     return NextResponse.json({
-      reply: jawabFallback(lastUser, petani, edu),
+      reply: tanpaDash(jawabFallback(lastUser, petani, edu)),
       nik,
       verified: !!petani,
       mode: "fallback",
