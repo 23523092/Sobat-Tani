@@ -15,7 +15,7 @@ import {
 import { logoutAction } from "@/app/admin/login/actions";
 
 const NAV = [
-  { href: "/admin", label: "Ringkasan", icon: LayoutDashboard },
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/pendaftar", label: "Verifikasi", icon: UserCheck },
   { href: "/admin/petani", label: "Data Petani", icon: Users },
   { href: "/admin/tebus", label: "Catat Tebus", icon: ScanLine },

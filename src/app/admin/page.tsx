@@ -42,7 +42,7 @@ export default async function AdminHome() {
     <div className="mx-auto max-w-5xl px-5 py-8 md:px-10">
       <header className="mb-8">
         <span className="text-xs font-700 uppercase tracking-[0.2em] text-harvest-500">Panel Petugas</span>
-        <h1 className="mt-1 font-display text-3xl font-600 text-pine-800">Ringkasan Distribusi</h1>
+        <h1 className="mt-1 font-display text-3xl font-600 text-pine-800">Dashboard Penyerapan</h1>
         <p className="mt-1.5 text-sm text-pine-500">Pemantauan penyaluran pupuk subsidi · KPL wilayah binaan</p>
       </header>
 
