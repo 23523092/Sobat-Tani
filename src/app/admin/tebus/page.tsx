@@ -1,12 +1,14 @@
-import { getHET, getPetaniByStatus } from "@/lib/queries";
+import { getHET, getPetaniByStatus, getStokTahunan } from "@/lib/queries";
+import { tahunAktif } from "@/lib/stock";
 import { TebusForm } from "./TebusForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function TebusPage() {
-  const [terdaftar, het] = await Promise.all([
+  const [terdaftar, het, stok] = await Promise.all([
     getPetaniByStatus("Terdaftar"),
     getHET(),
+    getStokTahunan(tahunAktif()),
   ]);
 
   return (
@@ -17,7 +19,7 @@ export default async function TebusPage() {
         <p className="mt-1.5 text-sm text-pine-500">Petugas mencatat penebusan, sisa kuota berkurang dan tersimpan di database.</p>
       </header>
 
-      <TebusForm petani={terdaftar} het={het} />
+      <TebusForm petani={terdaftar} het={het} stok={stok} />
     </div>
   );
 }

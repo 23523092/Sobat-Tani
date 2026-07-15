@@ -1,21 +1,24 @@
 import { formatRupiah, type JenisPupuk } from "@/lib/data";
-import { getHET, getPetaniList, getTransaksi, statistikGlobal } from "@/lib/queries";
-import { Users, PackageCheck, Boxes, Wallet, TrendingUp, Clock } from "lucide-react";
+import { getHET, getPetaniList, getStokTahunan, getTransaksi, statistikGlobal } from "@/lib/queries";
+import { tahunAktif } from "@/lib/stock";
+import { Users, PackageCheck, Boxes, Wallet, TrendingUp, Clock, Warehouse } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
-  const [s, petani, transaksi, het] = await Promise.all([
+  const tahun = tahunAktif();
+  const [s, petani, transaksi, het, stokFisik] = await Promise.all([
     statistikGlobal(),
     getPetaniList(),
-    getTransaksi(),
+    getTransaksi(tahun),
     getHET(),
+    getStokTahunan(tahun),
   ]);
 
   // agregasi stok per jenis
   const jenisList: JenisPupuk[] = ["Urea", "NPK", "Organik"];
-  const stok = jenisList.map((j) => {
+  const penyerapan = jenisList.map((j) => {
     let kuota = 0,
       sisa = 0;
     petani.forEach((p) =>
@@ -35,6 +38,7 @@ export default async function AdminHome() {
     { icon: Users, label: "Petani terdaftar", value: `${s.terdaftar}/${s.totalPetani}`, sub: "status aktif e-RDKK" },
     { icon: Boxes, label: "Total alokasi", value: `${(s.totalKuota / 1000).toFixed(1)} ton`, sub: "musim tanam berjalan" },
     { icon: PackageCheck, label: "Sudah ditebus", value: `${(s.tertebus / 1000).toFixed(1)} ton`, sub: `${pct(s.tertebus, s.totalKuota)}% dari alokasi` },
+    { icon: Warehouse, label: "Stok KPL tersedia", value: `${(stokFisik.reduce((a, b) => a + b.stokTersediaKg, 0) / 1000).toFixed(1)} ton`, sub: `stok fisik tahun ${tahun}` },
     { icon: Wallet, label: "Nilai transaksi", value: formatRupiah(s.nilaiTransaksi), sub: `${s.jumlahTransaksi} penebusan` },
   ];
 
@@ -61,7 +65,7 @@ export default async function AdminHome() {
       )}
 
       {/* stat cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map((c) => (
           <div key={c.label} className="rounded-2xl border border-pine-100 bg-white/70 p-5 shadow-card">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-pine-50 text-pine-600">
@@ -81,25 +85,26 @@ export default async function AdminHome() {
             <TrendingUp size={17} className="text-harvest-500" />
             <h2 className="font-display text-lg font-600 text-pine-800">Penyerapan per jenis pupuk</h2>
           </div>
-          {stok.every((st) => st.kuota === 0) ? (
+          {penyerapan.every((st) => st.kuota === 0) ? (
             <p className="py-8 text-center text-sm text-pine-400">Belum ada alokasi tercatat.</p>
           ) : (
             <div className="space-y-5">
-              {stok.map((st) => {
+              {penyerapan.map((st) => {
                 const p = pct(st.tertebus, st.kuota);
+                const fisik = stokFisik.find((x) => x.jenis === st.jenis);
                 return (
                   <div key={st.jenis}>
                     <div className="mb-1.5 flex items-center justify-between text-sm">
                       <span className="font-600 text-pine-700">{st.jenis}</span>
                       <span className="font-mono text-xs text-pine-500">
-                        {st.tertebus} / {st.kuota} kg · {p}%
+                        {st.tertebus} / {st.kuota} kg · {p}% kuota
                       </span>
                     </div>
                     <div className="h-2.5 overflow-hidden rounded-full bg-sage">
                       <div className="h-full rounded-full bg-pine-600" style={{ width: `${p}%` }} />
                     </div>
                     <div className="mt-1 font-mono text-[11px] text-pine-400">
-                      HET {het[st.jenis] != null ? formatRupiah(het[st.jenis]) : "-"}/kg · sisa {st.sisa} kg
+                      HET {het[st.jenis] != null ? formatRupiah(het[st.jenis]) : "-"}/kg · sisa kuota {st.sisa} kg · stok KPL {fisik?.stokTersediaKg ?? 0} kg
                     </div>
                   </div>
                 );

@@ -46,6 +46,7 @@ export interface Transaksi {
 export interface StokTahunan {
   tahun: number;
   jenis: JenisPupuk;
+  ada: boolean;
   stokAwalKg: number;
   stokTersediaKg: number;
   masukKg: number;

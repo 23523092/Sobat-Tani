@@ -8,6 +8,13 @@ export function isValidJenisPupuk(value: string): value is "Urea" | "NPK" | "Org
   return value === "Urea" || value === "NPK" || value === "Organik";
 }
 
+export function validatePenebusan(jumlahKg: number, sisaKuotaKg: number, stokTersediaKg: number): string | null {
+  if (!Number.isSafeInteger(jumlahKg) || jumlahKg <= 0) return "Jumlah kg tidak valid.";
+  if (jumlahKg > sisaKuotaKg) return `Melebihi sisa kuota petani: ${sisaKuotaKg} kg.`;
+  if (jumlahKg > stokTersediaKg) return `Stok KPL tidak cukup. Sisa stok: ${stokTersediaKg} kg.`;
+  return null;
+}
+
 export interface StockSummary {
   stokAwalKg: number;
   masukKg: number;

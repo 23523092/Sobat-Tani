@@ -9,6 +9,7 @@ import {
   ReceiptText,
   ArrowUpRight,
   ScanLine,
+  PackagePlus,
   UserCheck,
   LogOut,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const NAV = [
   { href: "/admin/pendaftar", label: "Verifikasi", icon: UserCheck },
   { href: "/admin/petani", label: "Data Petani", icon: Users },
   { href: "/admin/tebus", label: "Catat Tebus", icon: ScanLine },
+  { href: "/admin/stok", label: "Stok Pupuk", icon: PackagePlus },
   { href: "/admin/transaksi", label: "Riwayat Tebus", icon: ReceiptText },
 ];
 

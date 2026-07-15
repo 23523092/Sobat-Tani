@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, AlertCircle, Receipt } from "lucide-react";
-import { JENIS_LIST, formatRupiah, type HETMap, type JenisPupuk, type Petani } from "@/lib/data";
+import { JENIS_LIST, formatRupiah, type HETMap, type JenisPupuk, type Petani, type StokTahunan } from "@/lib/data";
+import { validatePenebusan } from "@/lib/stock";
 import { catatTebus } from "@/app/admin/actions";
 
 interface Trx {
@@ -15,7 +16,7 @@ interface Trx {
   waktu: string;
 }
 
-export function TebusForm({ petani, het }: { petani: Petani[]; het: HETMap }) {
+export function TebusForm({ petani, het, stok }: { petani: Petani[]; het: HETMap; stok: StokTahunan[] }) {
   const router = useRouter();
   const [nik, setNik] = useState("");
   const [jenis, setJenis] = useState<JenisPupuk>("Urea");
@@ -27,6 +28,7 @@ export function TebusForm({ petani, het }: { petani: Petani[]; het: HETMap }) {
 
   const dipilih = useMemo(() => petani.find((p) => p.nik === nik) ?? null, [petani, nik]);
   const alok = dipilih?.alokasi.find((a) => a.jenis === jenis) ?? null;
+  const stokJenis = stok.find((s) => s.jenis === jenis) ?? null;
   const harga = het[jenis] ?? 0;
 
   // Prefill nama kios dari desa petani
@@ -39,8 +41,8 @@ export function TebusForm({ petani, het }: { petani: Petani[]; het: HETMap }) {
     const n = parseInt(kg, 10);
     if (!dipilih) return setErr("Pilih petani dulu.");
     if (!alok) return setErr(`Petani ini tidak punya alokasi ${jenis}.`);
-    if (!n || n <= 0) return setErr("Jumlah kg tidak valid.");
-    if (n > alok.sisaKg) return setErr(`Melebihi sisa kuota. Sisa ${jenis}: ${alok.sisaKg} kg.`);
+    const validasi = validatePenebusan(n, alok.sisaKg, stokJenis?.stokTersediaKg ?? 0);
+    if (validasi) return setErr(validasi);
 
     start(async () => {
       const res = await catatTebus(dipilih.nik, jenis, n, kios);
@@ -107,6 +109,15 @@ export function TebusForm({ petani, het }: { petani: Petani[]; het: HETMap }) {
                     </div>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {dipilih && (
+              <div className="mt-3 rounded-xl border border-harvest-200 bg-harvest-100/60 px-3 py-2.5 text-sm text-harvest-600">
+                <div className="flex items-center justify-between">
+                  <span>Stok KPL {jenis}</span>
+                  <span className="font-mono font-600">{stokJenis?.stokTersediaKg ?? 0} kg</span>
+                </div>
               </div>
             )}
 

@@ -153,6 +153,7 @@ export async function getStokTahunan(tahun = tahunAktif()): Promise<StokTahunan[
   const kosong = JENIS_LIST.map((jenis) => ({
     tahun,
     jenis,
+    ada: false,
     stokAwalKg: 0,
     stokTersediaKg: 0,
     masukKg: 0,
@@ -187,6 +188,7 @@ export async function getStokTahunan(tahun = tahunAktif()): Promise<StokTahunan[
       return {
         tahun,
         jenis,
+        ada: Boolean(row),
         stokAwalKg: summary.stokAwalKg,
         stokTersediaKg: summary.tersediaKg,
         masukKg: summary.masukKg,
