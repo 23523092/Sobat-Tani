@@ -11,6 +11,7 @@ export const JENIS_LIST: JenisPupuk[] = ["Urea", "NPK", "Organik"];
 export const URUTAN_JENIS: Record<JenisPupuk, number> = { Urea: 0, NPK: 1, Organik: 2 };
 
 export interface Alokasi {
+  tahun: number;
   jenis: JenisPupuk;
   kuotaKg: number; // jatah total musim tanam
   sisaKg: number; // sisa yang bisa ditebus
@@ -32,6 +33,7 @@ export interface Petani {
 
 export interface Transaksi {
   id: string;
+  tahun: number;
   nik: string;
   nama: string;
   jenis: JenisPupuk;
@@ -39,6 +41,28 @@ export interface Transaksi {
   total: number;
   kios: string;
   tanggal: string; // ISO
+}
+
+export interface StokTahunan {
+  tahun: number;
+  jenis: JenisPupuk;
+  stokAwalKg: number;
+  stokTersediaKg: number;
+  masukKg: number;
+  keluarKg: number;
+  persentaseTerserap: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PenerimaanStok {
+  id: string;
+  tahun: number;
+  jenis: JenisPupuk;
+  jumlahKg: number;
+  sumber: string;
+  catatan?: string | null;
+  tanggal: string;
 }
 
 export type HETMap = Record<JenisPupuk, number>;
@@ -71,11 +95,11 @@ export function formatRupiah(n: number): string {
  * Dipakai petugas saat menyetujui pendaftar — angka bisa disesuaikan manual.
  * Basis: Urea 200 kg/ha, NPK 150 kg/ha, Organik 250 kg/ha (dibulatkan ke 5 kg).
  */
-export function saranAlokasi(luasHa: number): Alokasi[] {
+export function saranAlokasi(luasHa: number, tahun: number): Alokasi[] {
   const bulat = (x: number) => Math.max(0, Math.round(x / 5) * 5);
   const basis: Record<JenisPupuk, number> = { Urea: 200, NPK: 150, Organik: 250 };
   return JENIS_LIST.map((jenis) => {
     const kg = bulat(luasHa * basis[jenis]);
-    return { jenis, kuotaKg: kg, sisaKg: kg };
+    return { tahun, jenis, kuotaKg: kg, sisaKg: kg };
   });
 }

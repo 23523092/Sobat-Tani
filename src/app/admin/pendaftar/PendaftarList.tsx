@@ -19,6 +19,7 @@ import {
   type JenisPupuk,
   type Petani,
 } from "@/lib/data";
+import { tahunAktif } from "@/lib/stock";
 import { setujuiPendaftar, tolakPendaftar, ubahStatusPetani } from "@/app/admin/actions";
 
 type Mode = { nik: string; jenis: "approve" | "reject" } | null;
@@ -41,7 +42,7 @@ export function PendaftarList({
 
   function bukaApprove(p: Petani) {
     setErr("");
-    const saran = saranAlokasi(p.luasLahanHa);
+    const saran = saranAlokasi(p.luasLahanHa, tahunAktif());
     const k: KuotaState = { Urea: "", NPK: "", Organik: "" };
     saran.forEach((a) => (k[a.jenis] = String(a.kuotaKg)));
     setKuota(k);
